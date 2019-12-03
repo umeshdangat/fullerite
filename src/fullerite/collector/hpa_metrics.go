@@ -72,7 +72,7 @@ func parseHTTPMetrics(raw []byte) (float64, error) {
 	return strconv.ParseFloat(utilization, 64)
 }
 
-// parseUWSGIMetrics return the percentage of none idle workers.
+// parseUWSGIMetrics return the percentage of non-idle workers.
 func parseUWSGIMetrics(raw []byte) (float64, error) {
 	var utilization float64
 	result := make(map[string]interface{})
@@ -103,7 +103,7 @@ func parseUWSGIMetrics(raw []byte) (float64, error) {
 	return utilization, err
 }
 
-// buildHPAMetric build a new Metrics.
+// buildHPAMetric build a new Metric.
 func (d *HPAMetrics) buildHPAMetric(name string, dimensions map[string]string, value float64) (m metric.Metric) {
 	m = metric.New(name)
 	m.MetricType = metric.Gauge
@@ -156,7 +156,7 @@ func (d *HPAMetrics) Configure(configMap map[string]interface{}) {
 }
 
 // Collect Ping kubelet for pod specs. Iterates all pods, and collect http or uwsgi metrics
-// if all containers in the pod are healthy, and if there is "autoscaling"="http"/"uwsgi" in
+// if all containers in the pod are ready, and if there is "autoscaling"="http"/"uwsgi" in
 // the annotation.
 func (d *HPAMetrics) Collect() {
 	d.log.Info("Collecting HPA Metrics")
@@ -187,7 +187,7 @@ func (d *HPAMetrics) Collect() {
 	}
 }
 
-// CollectMetricsForPod collect http or uwsgi metrics if all containers in the pod are healthy,
+// CollectMetricsForPod collect http or uwsgi metrics if all containers in the pod are ready,
 // and if there is "autoscaling"="http"/"uwsgi" in the annotation.
 func (d *HPAMetrics) CollectMetricsForPod(pod *corev1.Pod) {
 	metricsName, annotationPresent := pod.GetAnnotations()[autoscalingAnnotation]
