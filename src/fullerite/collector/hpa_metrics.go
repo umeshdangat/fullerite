@@ -105,7 +105,6 @@ func parseUWSGIMetrics(raw []byte) (float64, error) {
 
 // buildHPAMetric build a new Metrics.
 func (d *HPAMetrics) buildHPAMetric(name string, dimensions map[string]string, value float64) (m metric.Metric) {
-	d.log.Info("%s",name)
 	m = metric.New(name)
 	m.MetricType = metric.Gauge
 	m.Value = value
