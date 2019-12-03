@@ -26,13 +26,13 @@ func getFakeUWSGIWorkerStatsResponse() []byte {
 	}`)
 }
 
-func getFakeHttpResponse() []byte {
+func getFakeHTTPResponse() []byte {
 	return []byte(`{
         "utilization": "0.75"
 	}`)
 }
 
-func buildHPAMetrics() (*HPAMetrics){
+func buildHPAMetrics() *HPAMetrics {
 	expectedChan := make(chan metric.Metric)
 	var expectedLogger = defaultLog.WithFields(l.Fields{"collector": "fullerite"})
 	return newHPAMetrics(expectedChan, 10, expectedLogger).(*HPAMetrics)
@@ -49,18 +49,19 @@ func TestConfigureHPAMetrics(t *testing.T) {
 }
 
 func TestSanitizeDimensions(t *testing.T) {
-	var dimensions = map[string]string{"paasta.yelp.com/instance": "fake-instance"}	
+	var dimensions = map[string]string{"paasta.yelp.com/instance": "fake-instance"}
 	assert.Equal(t, "fake-instance", sanitizeDimensions(dimensions)["paasta_yelp_com_instance"])
 }
 
 func TestParseMetrics(t *testing.T) {
-	httpVal, _ := parseHTTPMetrics(getFakeHttpResponse())
+	httpVal, _ := parseHTTPMetrics(getFakeHTTPResponse())
 	assert.Equal(t, 0.75, httpVal)
 	uwsgiVal, _ := parseUWSGIMetrics(getFakeUWSGIWorkerStatsResponse())
 	assert.Equal(t, 0.75, uwsgiVal)
 }
 
 func TestAllContainersAreReady(t *testing.T) {
+	d := buildHPAMetrics()
 	podJSON := []byte(`
 	{
 		"status": {
@@ -75,7 +76,7 @@ func TestAllContainersAreReady(t *testing.T) {
 	}`)
 	var pod1 *corev1.Pod
 	json.Unmarshal(podJSON, &pod1)
-	assert.False(t, allContainersAreReady(pod1))
+	assert.False(t, d.allContainersAreReady(pod1))
 
 	podJSON = []byte(`
 	{
@@ -91,7 +92,7 @@ func TestAllContainersAreReady(t *testing.T) {
 	}`)
 	var pod2 *corev1.Pod
 	json.Unmarshal(podJSON, &pod2)
-	assert.True(t, allContainersAreReady(pod2))
+	assert.True(t, d.allContainersAreReady(pod2))
 }
 
 func TestGetContainerPort(t *testing.T) {

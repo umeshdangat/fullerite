@@ -3,9 +3,9 @@ package collector
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,32 +17,45 @@ import (
 )
 
 const (
-	defaultKubeletPort = 10255
+	defaultKubeletPort    = 10255
 	autoscalingAnnotation = "autoscaling"
-	instanceNameLabelKey = "paasta.yelp.com/instance"
+	instanceNameLabelKey  = "paasta.yelp.com/instance"
 )
 
-var metricsEndpoints = map[string]string{"uwsgi": "status/uwsgi","http": "status"}
+var metricsEndpoints = map[string]string{"uwsgi": "status/uwsgi", "http": "status"}
 var dimensionSanitizer = strings.NewReplacer(
 	".", "_",
 	"/", "_")
 
+// HPAMetrics An example of custom options of configMap is
+// {
+//		"kubeletTimeout": 3,
+//		"metricsProviderTimeout": 3,
+//		"kubeletPort": 10255,
+//		"additionalDimensions": {
+//			"kubernetes_cluster": "norcal-stagef"
+//		}
+// }
 type HPAMetrics struct {
 	baseCollector
-	kubeletTimeout       int
-	metricsProviderTimeout       int
-	podSpecURL           string
-	additionalDimensions map[string]string
+	kubeletTimeout         int
+	metricsProviderTimeout int
+	podSpecURL             string
+	additionalDimensions   map[string]string
+}
+
+func init() {
+	RegisterCollector("HPAMetrics", newHPAMetrics)
 }
 
 // sanitizeDimensions replaces "/" or "_" in all  dimension keys and returns a copy
-// of the map. 
-func sanitizeDimensions(labels map[string]string) map[string]string{
+// of the map.
+func sanitizeDimensions(labels map[string]string) map[string]string {
 	sanitizedDimensions := make(map[string]string)
 	for k, v := range labels {
-		sanitizedDimensions[dimensionSanitizer.Replace(k)] = v 
+		sanitizedDimensions[dimensionSanitizer.Replace(k)] = v
 	}
-	return sanitizedDimensions 
+	return sanitizedDimensions
 }
 
 // parseHTTPMetrics return utilization field in the json input.
@@ -61,7 +74,7 @@ func parseHTTPMetrics(raw []byte) (float64, error) {
 
 // parseUWSGIMetrics return the percentage of none idle workers.
 func parseUWSGIMetrics(raw []byte) (float64, error) {
-	var utilization float64 = 0 
+	var utilization float64
 	result := make(map[string]interface{})
 	err := json.Unmarshal(raw, &result)
 	if err != nil {
@@ -86,21 +99,18 @@ func parseUWSGIMetrics(raw []byte) (float64, error) {
 			activeWorker++
 		}
 	}
-	utilization = float64(activeWorker)/float64(totalWorker)
+	utilization = float64(activeWorker) / float64(totalWorker)
 	return utilization, err
 }
 
 // buildHPAMetric build a new Metrics.
-func buildHPAMetric(name string, dimensions map[string]string, value float64) (m metric.Metric) {
+func (d *HPAMetrics) buildHPAMetric(name string, dimensions map[string]string, value float64) (m metric.Metric) {
+	d.log.Info("%s",name)
 	m = metric.New(name)
 	m.MetricType = metric.Gauge
 	m.Value = value
 	m.AddDimensions(dimensions)
 	return m
-}
-
-func init() {
-	RegisterCollector("HPAMetrics", newHPAMetrics)
 }
 
 func newHPAMetrics(channel chan metric.Metric, initialInterval int, log *l.Entry) Collector {
@@ -117,33 +127,25 @@ func newHPAMetrics(channel chan metric.Metric, initialInterval int, log *l.Entry
 
 // Configure configures HPAMetrics struct based on config file. Initial interval is used as timeout
 // for both connection to kubelet and connection to metrics provider if they are not set.
-// An example of custom options of configMap is 
-// {
-//		"kubeletTimeout": 3, 
-//		"metricsProviderTimeout": 3, 
-//		"kubeletPort": 10255,
-//		"additionalDimensions": {
-//			"kubernetes_cluster": "norcal-stagef"
-//		}
-// } 
 func (d *HPAMetrics) Configure(configMap map[string]interface{}) {
+	d.log.Info("Configuring HPAMetrics collector")
 	if kubeletTimeout, exists := configMap["kubeletTimeout"]; exists {
 		d.kubeletTimeout = config.GetAsInt(kubeletTimeout, d.interval)
 	} else {
-		d.kubeletTimeout = d.interval 
+		d.kubeletTimeout = d.interval
 	}
 
 	if metricsProviderTimeout, exists := configMap["metricsProviderTimeout"]; exists {
 		d.metricsProviderTimeout = config.GetAsInt(metricsProviderTimeout, d.interval)
 	} else {
-		d.metricsProviderTimeout = d.interval 
+		d.metricsProviderTimeout = d.interval
 	}
 
 	var port int
 	if kubeletPort, exists := configMap["kubeletPort"]; exists {
 		port = config.GetAsInt(kubeletPort, defaultKubeletPort)
 	} else {
-		port = defaultKubeletPort 
+		port = defaultKubeletPort
 	}
 	d.podSpecURL = fmt.Sprintf("http://localhost:%d/pods", port)
 
@@ -155,9 +157,10 @@ func (d *HPAMetrics) Configure(configMap map[string]interface{}) {
 }
 
 // Collect Ping kubelet for pod specs. Iterates all pods, and collect http or uwsgi metrics
-// if all containers in the pod are healthy, and if there is "autoscaling"="http"/"uwsgi" in 
-// the annotation. 
+// if all containers in the pod are healthy, and if there is "autoscaling"="http"/"uwsgi" in
+// the annotation.
 func (d *HPAMetrics) Collect() {
+	d.log.Info("Collecting HPA Metrics")
 	client := http.Client{
 		Timeout: time.Second * time.Duration(d.kubeletTimeout),
 	}
@@ -186,10 +189,10 @@ func (d *HPAMetrics) Collect() {
 }
 
 // CollectMetricsForPod collect http or uwsgi metrics if all containers in the pod are healthy,
-// and if there is "autoscaling"="http"/"uwsgi" in the annotation. 
+// and if there is "autoscaling"="http"/"uwsgi" in the annotation.
 func (d *HPAMetrics) CollectMetricsForPod(pod *corev1.Pod) {
 	metricsName, annotationPresent := pod.GetAnnotations()[autoscalingAnnotation]
-	if !annotationPresent || allContainersAreReady(pod) {
+	if !annotationPresent || !d.allContainersAreReady(pod) {
 		return
 	}
 	podIP := pod.Status.PodIP
@@ -198,7 +201,7 @@ func (d *HPAMetrics) CollectMetricsForPod(pod *corev1.Pod) {
 	labels := pod.GetLabels()
 	instanceName := labels[instanceNameLabelKey]
 	containerPort, err := getContainerPort(pod, instanceName)
-	if err != nil{
+	if err != nil {
 		d.log.Error(err)
 		return
 	}
@@ -221,7 +224,8 @@ func (d *HPAMetrics) CollectMetricsForPod(pod *corev1.Pod) {
 
 	var value float64
 	switch metricName {
-		case "uwsgi": {
+	case "uwsgi":
+		{
 			tmp, uwsgiErr := parseUWSGIMetrics(raw)
 			value = tmp
 			if uwsgiErr != nil {
@@ -229,7 +233,8 @@ func (d *HPAMetrics) CollectMetricsForPod(pod *corev1.Pod) {
 				return
 			}
 		}
-		case "http": {
+	case "http":
+		{
 			tmp, httpErr := parseHTTPMetrics(raw)
 			value = tmp
 			if httpErr != nil {
@@ -246,22 +251,23 @@ func (d *HPAMetrics) CollectMetricsForPod(pod *corev1.Pod) {
 	}
 	sanitizedDimensions := sanitizeDimensions(labels)
 
-	d.Channel() <- buildHPAMetric(metricName, sanitizedDimensions, value)
+	d.Channel() <- d.buildHPAMetric(metricsName, sanitizedDimensions, value)
 }
 
 // allContainersAreReady returns True if all containers in this pod are ready
-func allContainersAreReady(pod *corev1.Pod) (bool) {
+func (d *HPAMetrics) allContainersAreReady(pod *corev1.Pod) bool {
 	for _, status := range pod.Status.ContainerStatuses {
 		if !status.Ready {
+			d.log.Debug("Not all containers are ready for pod %", pod.GetName())
 			return false
 		}
 	}
 	return true
 }
 
-// getContainerPort returns port of the application container. 
+// getContainerPort returns port of the application container.
 func getContainerPort(pod *corev1.Pod, instanceName string) (int, error) {
-	// Sanitize instance name. The instance name in label is not sanitized, 
+	// Sanitize instance name. The instance name in label is not sanitized,
 	// but The instance name in container name is sanitized.
 	instanceName = strings.ToLower(strings.Replace(instanceName, "_", "--", -1))
 	// Remove possible trailing hash added by k8s
