@@ -17,10 +17,10 @@ import (
 )
 
 const (
-	defaultKubeletPort    = 10255
+	defaultKubeletPort          = 10255
 	legacyAutoscalingAnnotation = "autoscaling"
-	autoscalingAnnotation = "hpa"
-	instanceNameLabelKey  = "paasta.yelp.com/instance"
+	autoscalingAnnotation       = "hpa"
+	instanceNameLabelKey        = "paasta.yelp.com/instance"
 )
 
 var metricsEndpoints = map[string]string{"uwsgi": "status/uwsgi", "http": "status"}
@@ -45,9 +45,9 @@ type HPAMetrics struct {
 	additionalDimensions   map[string]string
 }
 
-type HPAMetricData struct {
-	dimensions	map[string]string
-	name	string
+type hpaMetricData struct {
+	dimensions map[string]string
+	name       string
 }
 
 func init() {
@@ -206,7 +206,7 @@ func (d *HPAMetrics) getFromURL(url string) ([]byte, error) {
 	raw, readErr := ioutil.ReadAll(res.Body)
 	if readErr != nil {
 		d.log.Error("Error reading response from metrics provider: ", readErr)
-		return raw, readErr 
+		return raw, readErr
 	}
 	return raw, nil
 }
@@ -218,27 +218,31 @@ func (d *HPAMetrics) CollectMetricsForPod(pod *corev1.Pod) {
 	if !d.allContainersAreReady(pod) {
 		return
 	}
-	
+
 	// Read all supported metrics and their dimensions from annotations
-	metrics := []*HPAMetricData{}
+	metrics := []*hpaMetricData{}
 	annotations := pod.GetAnnotations()
 	if metricNames, annotationPresent := annotations[autoscalingAnnotation]; annotationPresent {
-		for metricName, dimensions := range config.GetAsMap(metricNames) {
-			dimensionMap := config.GetAsMap(dimensions)
-			metric := &HPAMetricData{name: metricName, dimensions: make(map[string]string)}
-			if len(dimensionMap) > 0 {
-				for k, v := range dimensionMap {
-					metric.dimensions[k] = v
+		var metricsMap = map[string]interface{}{}
+		err := json.Unmarshal([]byte(metricNames), &metricsMap)
+		if err != nil {
+			d.log.Warn(err)
+		}
+		for metricName, dimensions := range metricsMap {
+			metric := &hpaMetricData{name: metricName, dimensions: make(map[string]string)}
+			if len(dimensions.(map[string]interface{})) > 0 {
+				for k, v := range dimensions.(map[string]interface{}) {
+					metric.dimensions[k] = v.(string)
 				}
 			}
 			metrics = append(metrics, metric)
 		}
 	} else if metricName, annotationPresent := annotations[legacyAutoscalingAnnotation]; annotationPresent {
-			metrics = append(metrics, &HPAMetricData{name: metricName, dimensions: make(map[string]string)})
+		metrics = append(metrics, &hpaMetricData{name: metricName, dimensions: make(map[string]string)})
 	} else {
 		return
 	}
-	
+
 	podIP := pod.Status.PodIP
 	podName := pod.GetName()
 	podNamespace := pod.GetNamespace()
@@ -254,10 +258,10 @@ func (d *HPAMetrics) CollectMetricsForPod(pod *corev1.Pod) {
 	for k, v := range d.additionalDimensions {
 		labels[k] = v
 	}
-	// For all metrics, if their dimension is empty, use labels as dimension. 
+	// For all metrics, if their dimension is empty, use labels as dimension.
 	for _, metric := range metrics {
 		url := fmt.Sprintf("http://%s:%d/%s", podIP, containerPort, metricsEndpoints[metric.name])
-		raw, err := d.getFromURL(url)	
+		raw, err := d.getFromURL(url)
 		if err != nil {
 			return
 		}
