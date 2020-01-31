@@ -131,6 +131,18 @@ func TestGetAsMap(t *testing.T) {
 	assert.Equal(config.GetAsMap(interfaceMapToParse), expectedValue)
 }
 
+func TestGetAsSet(t *testing.T) {
+	assert := assert.New(t)
+
+	// Test if string array can be converted to map[string]bool
+	stringToParse := "[\"runtimeenv\", \"region\"]"
+	expectedValue := map[string]bool{
+		"runtimeenv": true,
+		"region":     true,
+	}
+	assert.Equal(config.GetAsSet(stringToParse), expectedValue)
+}
+
 func TestGetAsSlice(t *testing.T) {
 	assert := assert.New(t)
 

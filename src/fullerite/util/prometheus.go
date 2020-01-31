@@ -74,12 +74,11 @@ func ExtractPrometheusMetrics(
 				}
 			}
 		}
-
-		if metricsWhitelist != nil {
+		if metricsWhitelist != nil && len(*metricsWhitelist) != 0 {
 			if _, ok := (*metricsWhitelist)[metricName]; !ok {
 				continue
 			}
-		} else if metricsBlacklist != nil {
+		} else if metricsBlacklist != nil && len(*metricsBlacklist) != 0 {
 			if _, ok := (*metricsBlacklist)[metricName]; ok {
 				continue
 			}
@@ -130,6 +129,8 @@ func ExtractPrometheusMetrics(
 		for dimensionName, dimensionValue := range generatedDimensions {
 			metric.AddDimension(dimensionName, dimensionValue)
 		}
+
+		log.Info("Appending metric: ", metric)
 		metrics = append(metrics, metric)
 	}
 

@@ -80,9 +80,7 @@ tests: deps diamond_test fullerite-tests
 
 fullerite-tests:
 	@echo Testing $(FULLERITE)
-	@for pkg in $(PKGS); do \
-		go test -race -cover $$pkg || exit 1;\
-	done
+	go test -race -cover fullerite/... || exit 1;\
 
 qbt:
 	@echo Fast testing $(FULLERITE)
