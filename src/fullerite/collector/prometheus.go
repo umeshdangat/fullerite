@@ -30,8 +30,8 @@ type Endpoint struct {
 	headers             map[string]string
 	httpGetter          util.HTTPGetter
 	generatedDimensions map[string]string
-	metricsBlacklist    *map[string]bool
-	metricsWhitelist    *map[string]bool
+	metricsBlacklist    map[string]bool
+	metricsWhitelist    map[string]bool
 }
 
 // Prometheus collector type.
@@ -93,7 +93,13 @@ func (p *Prometheus) Configure(configMap map[string]interface{}) {
 		if v, exists := endpoint["timeout"]; exists {
 			timeout = config.GetAsInt(v, timeout)
 		}
-
+		var metricsWhitelist, metricsBlacklist map[string]bool = nil, nil
+		if v, exists := endpoint["metrics_whitelist"]; exists {
+			metricsWhitelist = config.GetAsSet(v)
+		}
+		if v, exists := endpoint["metrics_blacklist"]; exists {
+			metricsBlacklist = config.GetAsSet(v)
+		}
 		httpGetter, err := util.NewHTTPGetter(
 			p.getString(endpoint, "serverCaFile"),
 			p.getString(endpoint, "clientCertFile"),
@@ -112,8 +118,8 @@ func (p *Prometheus) Configure(configMap map[string]interface{}) {
 				"X-Prometheus-Scrape-Timeout-Seconds": fmt.Sprintf("%d", timeout),
 			},
 			httpGetter:          httpGetter,
-			metricsWhitelist:    p.getSet(endpoint, "metrics_whitelist"),
-			metricsBlacklist:    p.getSet(endpoint, "metrics_blacklist"),
+			metricsWhitelist:    metricsWhitelist,
+			metricsBlacklist:    metricsBlacklist,
 			generatedDimensions: generatedDimensions,
 		})
 	}

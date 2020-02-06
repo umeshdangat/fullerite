@@ -2,6 +2,7 @@ package collector
 
 import (
 	"testing"
+	"encoding/json"
 
 	l "github.com/Sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -27,31 +28,29 @@ func TestPrometheusConfigure(t *testing.T) {
 
 	p := newPrometheus(expectedChan, 10, expectedLogger).(*Prometheus)
 
-	p.Configure(map[string]interface{}{
-		"endpoints": []interface{}{
-			map[string]interface{}{
-				"prefix": "123/",
-				"url":    "https://etcd1.nowhere.com:2379/metrics",
-				"metrics_whitelist": []string{
-					"123",
-					"456",
-				},
-				"metrics_blacklist": []string{
-					"78",
-				},
-				"generated_dimensions": map[string]interface{}{
-					"foo": "bar",
-				},
-			},
-		},
-	})
+	testConfig := []byte(`
+	{
+		"endpoints": [
+			{
+				"prefix":         "123/",
+				"url":            "https://etcd1.nowhere.com:2379/metrics",
+				"metrics_whitelist": ["123", "456"],
+				"metrics_blacklist": ["78"],
+				"generated_dimensions": {
+					"foo": "bar"
+				}
+			}
+		]
+	}`)
+	testConfigMap := make(map[string]interface{})
+	json.Unmarshal(testConfig, &testConfigMap)
+	p.Configure(testConfigMap)
 
-	var endpoint *Endpoint
-	endpoint = p.endpoints[0]
+	var endpoint *Endpoint = p.endpoints[0]
 
 	assert.Equal(t, endpoint.prefix, "123/")
 	assert.Equal(t, endpoint.url, "https://etcd1.nowhere.com:2379/metrics")
-	assert.Equal(t, *endpoint.metricsWhitelist, map[string]bool{"123": true, "456": true})
-	assert.Equal(t, *endpoint.metricsBlacklist, map[string]bool{"78": true})
+	assert.Equal(t, endpoint.metricsWhitelist, map[string]bool{"123": true, "456": true})
+	assert.Equal(t, endpoint.metricsBlacklist, map[string]bool{"78": true})
 	assert.Equal(t, endpoint.generatedDimensions, map[string]string{"foo": "bar"})
 }
