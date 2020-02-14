@@ -266,7 +266,7 @@ func (d *HPAMetrics) CollectMetricsForPod(pod *corev1.Pod) {
 			return
 		}
 		var value float64
-		switch metricName {
+		switch metric.name {
 		case "uwsgi":
 			{
 				tmp, uwsgiErr := parseUWSGIMetrics(raw)
@@ -284,6 +284,11 @@ func (d *HPAMetrics) CollectMetricsForPod(pod *corev1.Pod) {
 					d.log.Error(httpErr)
 					return
 				}
+			}
+		default:
+			{
+				d.log.Error("Unknown metric name ", metric.name)
+				return
 			}
 		}
 		var sanitizedDimensions map[string]string
