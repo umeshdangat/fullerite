@@ -258,7 +258,7 @@ func (d *HPAMetrics) CollectMetricsForPod(pod *corev1.Pod) {
 	for k, v := range d.additionalDimensions {
 		labels[k] = v
 	}
-	// For all metrics, if their dimension is empty, use labels as dimension.
+	// For all metrics, use labels as dimension, and update with user specified dimensions.
 	for _, metric := range metrics {
 		url := fmt.Sprintf("http://%s:%d/%s", podIP, containerPort, metricsEndpoints[metric.name])
 		raw, err := d.getFromURL(url)
@@ -291,11 +291,9 @@ func (d *HPAMetrics) CollectMetricsForPod(pod *corev1.Pod) {
 				return
 			}
 		}
-		var sanitizedDimensions map[string]string
-		if len(metric.dimensions) == 0 {
-			sanitizedDimensions = sanitizeDimensions(labels)
-		} else {
-			sanitizedDimensions = sanitizeDimensions(metric.dimensions)
+		var sanitizedDimensions map[string]string = sanitizeDimensions(labels)
+		for k, v := range sanitizeDimensions(metric.dimensions) {
+			sanitizedDimensions[k] = v
 		}
 		d.Channel() <- d.buildHPAMetric(metric.name, sanitizedDimensions, value)
 	}
