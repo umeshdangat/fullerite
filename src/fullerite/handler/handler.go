@@ -114,6 +114,9 @@ type Handler interface {
 	// takes care of reporting emission metrics
 	OverrideBaseEmissionMetricsReporter()
 	UseCustomEmissionMetricsReporter() bool
+
+	BeginCollection(string)
+	EndCollection(string)
 }
 
 type emissionTiming struct {
@@ -456,6 +459,12 @@ func (base *BaseHandler) run(emitFunc func([]metric.Metric) bool) {
 	}
 }
 
+func (base *BaseHandler) BeginCollection(name string) {
+}
+
+func (base *BaseHandler) EndCollection(name string) {
+}
+
 func (base *BaseHandler) listenForMetrics(
 	emitFunc func([]metric.Metric) bool,
 	collectorEnd CollectorEnd,
@@ -489,6 +498,14 @@ stopReading:
 				if currentBufferSize > 0 {
 					flushFunction()
 				}
+				continue
+			}
+			if incomingMetric.BeginCollection() {
+				base.BeginCollection(incomingMetric.Dimensions["collector"])
+				continue
+			}
+			if incomingMetric.EndCollection() {
+				base.EndCollection(incomingMetric.Dimensions["collector"])
 				continue
 			}
 
