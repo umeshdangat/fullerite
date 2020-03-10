@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -27,6 +26,8 @@ var metricsEndpoints = map[string]string{"uwsgi": "status/uwsgi", "http": "statu
 var dimensionSanitizer = strings.NewReplacer(
 	".", "_",
 	"/", "_")
+var filterNameReplacer = strings.NewReplacer(
+	"paasta_yelp_com", "paasta")
 
 // HPAMetrics An example of custom options of configMap is
 // {
@@ -54,12 +55,13 @@ func init() {
 	RegisterCollector("HPAMetrics", newHPAMetrics)
 }
 
-// sanitizeDimensions replaces "/" or "_" in all  dimension keys and returns a copy
-// of the map.
+// sanitizeDimensions replaces "/" or "_", and replace paasta_yelp_com with paasta 
+// in all dimension keys and returns a copy // of the map.
 func sanitizeDimensions(labels map[string]string) map[string]string {
 	sanitizedDimensions := make(map[string]string)
 	for k, v := range labels {
-		sanitizedDimensions[dimensionSanitizer.Replace(k)] = v
+		tmp := dimensionSanitizer.Replace(k)
+		sanitizedDimensions[filterNameReplacer.Replace(tmp)] = v
 	}
 	return sanitizedDimensions
 }
@@ -71,11 +73,11 @@ func parseHTTPMetrics(raw []byte) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	utilization, ok := result["utilization"].(string)
+	utilization, ok := result["utilization"].(float64)
 	if !ok {
-		return 0, fmt.Errorf("\"utilization\" field not found or not a string")
+		return 0, fmt.Errorf("\"utilization\" field not found or not a float")
 	}
-	return strconv.ParseFloat(utilization, 64)
+	return utilization, nil
 }
 
 // parseUWSGIMetrics return the percentage of non-idle workers.
